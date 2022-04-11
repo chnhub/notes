@@ -369,5 +369,160 @@
 ### 1.4 AOP
 - 动态代理，加日志
   ```
+              add   sub   mul   div               切面类：
+  方法开始：    .     .     .     .           横切关注点  通知方法
+  方法返回：    .     .     .     .           横切关注点  通知方法
+  方法异常：    .     .     .     .           横切关注点  通知方法
+  方法结束：    .     .     .     .           横切关注点  通知方法
+  
+  连接点：每个方法的每一个位置都是连接点
+  切入点：需要执行日志记录的地方
+  切入点表达式：众多连接点选出感兴趣的地方
+  
+  写一个AOP流程：
+  1.导入相关jar包
+  <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-aspects</artifactId>
+      <version>4.0.0.RELEASE</version>
+  </dependency>
 
+  <dependency>
+      <groupId>aopalliance</groupId>
+      <artifactId>aopalliance</artifactId>
+      <version>1.0</version>
+  </dependency>
+
+  <dependency>
+      <groupId>org.aspectj</groupId>
+      <artifactId>aspectjweaver</artifactId>
+      <version>1.6.8</version>
+  </dependency>
+
+  <dependency>
+      <groupId>cglib</groupId>
+      <artifactId>cglib</artifactId>
+      <version>2.2</version>
+  </dependency>
+  2.写配置
+    1.将目标类和切面类（封装了通知方法（在目标方法执行前后执行的方法））
+    2.告诉spring哪个是切面类@Aspect
+    3.告诉spring，切面类里面的每个方法都是何时何地运行
+      通知注解：
+      @Before:在目标方法之前运行    前置通知
+      @After:在目标方法结束之后     后置通知
+      @AfterReturning:在目标方法正常返回之后    返回通知
+      @AfterThrowing:在目标方法抛出异常之后运行   异常通知 
+      @Around:环绕    环绕通知
+    4.开启基于注解的aop
+      <aop:aspectj-autoproxy ></aop:aspectj-autoproxy>
+    //获取bean时一定要用接口类型
+    细节：
+      bean的类型为MyMathCalculator; 实际为com.sun.proxy类型
+      AOP的底层时动态代理，容器中保存的组件时他的代理对象，$Proxy12。当然不是本类的类型
+      接口加载注解后，仍不创建对象，但会告诉spring容器中有这个类型
+      如果没有接口类型cglib会帮我们创建代理对象
+    切入点表达式写法：
+      固定格式：execution(访问权限符 返回值类型 方法全类名(参数表))
+      *:
+        匹配一个或多个字符：execution(public int com.testchn.aop.impl.My*.*(int, int))
+        匹配任意一个参数：匹配一个或多个字符：execution(public int com.testchn.aop.impl.MyCalculator.*(*, int))
+        权限位置*不能，不写可以
+        
+      ..:
+        匹配任意多个参数，任意类型：匹配一个或多个字符：execution(public int com.testchn.aop.impl.MyCalculator.*(..))
+        任意多层路径：execution(public int com.testchn..MyCalculator.*(..))
+
+      记住两种：
+        最准确的：execution(public int com.testchn.aop.impl.MyCalculator.add(int, int))
+        最模糊的：execution(* *.*(..))
+          *默认只能匹配一个，但*开头是匹配所有
+      &&,||,!：类似逻辑运算符
+
+
+  3.测试
+  
+  
+  通知方法执行顺序：
+  try{
+    @Before
+    method.invoke(obj,orgs);
+    @AfterReturning
+  }catch(){
+    @AfterThrowing
+  }finally{
+    @After
+  }
+  //注意和流程和正常逻辑不一致
+  正常执行：@Before("前置通知")-->@After(后置通知)-->AfterReturning(正常返回)
+  异常执行：@Before("前置通知")-->@After(后置通知)-->AfterThrowing(异常返回)
+  
+  - JoinPoint获取目标方法的信息
+    //需要告诉spring用result接受返回值
+    value：切入点表达式
+    returning：运算结果
+    throwing：异常
+    通知方法约束：
+      方法的参数列表不能乱写，
+      通知方法是spring利用反射调用的，每次的确定方法参数表的值
+        JoinPoint：认识
+        Object：不认识
+        不认识的一定要注解告诉spring
+      接收异常范围一定要大
+    @AfterReturning(value = "execution(public int com.testchn.aop.impl.MyCalculator.add(int, int))",returning = "result")
+      public static void logReturn(JoinPoint joinPoint, Object result){
+          System.out.println("log返回后执行");
+          //获取参数
+          Object[] args = joinPoint.getArgs();
+          //获取方法签名
+          Signature signature = joinPoint.getSignature();
+          String name = signature.getName();
+          System.out.println(name+"方法，log开始执行，参数列表："+ Arrays.asList(args)+"结果为："+ result.toString());
+      }
+  - 抽取可重用的切入点表达式
+    1.随便声明一个没有实现的返回void的空方法
+    2.给方法上标注@Pointcut注解
+        @Pointcut(value = "execution(public int com.testchn.aop.impl.MyCalculator.add(int, int))")
+    public void pointCut(){};
+    @Before(value = "pointCut()")
+  - 环形通知 @Around
+    @Around
+      spring中最强大的通知
+      动态代理
+      通知方法可正常执行
+    try{
+      //前置通知
+      method.invoke(obj,orgs);
+      //返回通知
+    }catch(){
+      //异常通知
+    }finally{
+      //后置通知
+    }
+    四合一通知就是环绕通知
+    @Around("pointCut()")
+    Object myAround(ProceedingJoinPoint pjp){
+      Object[] args = pjp.getArgs();
+      //利用反射调用目标方法即可，就是method.invoke(obj,args)
+      Object proceed;
+      try{
+        //前置通知
+        proceed = pjp.proceed(args);
+        //返回通知
+      }catch(){
+        //异常通知
+      }finally{
+        //后置通知
+      }
+      //反射调用的返回值
+      return proceed;
+    }
+    顺序：
+      环绕前置通知
+      普通前置通知
+      目标方法执行
+      环绕正常/异常通知  优先于普通通知，异常一定要抛出去，否则普通异常无法接收到
+      环绕后置通知
+      普通后置通知
+      普通返回通知
   ```
