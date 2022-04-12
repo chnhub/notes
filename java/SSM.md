@@ -5,6 +5,7 @@
     - [1.2 DI：（Dependency Injection）依赖注入;](#12-didependency-injection依赖注入)
     - [1.3 bean](#13-bean)
     - [1.4 AOP](#14-aop)
+    - [1.5 事务](#15-事务)
 ----
 # SSM
 ## 1.Spring
@@ -525,4 +526,43 @@
       环绕后置通知
       普通后置通知
       普通返回通知
+
   ```
+- 多切面运行顺序
+  ![切面](./files/多切面.png)  
+  类似栈结构，先进后出  
+  多个切面谁在最外层？按照切面类的首字母正向排序  
+  可调整顺序：@Order(1) 值越小越高  
+  !注意加入环形通知后的顺序，如图  
+  使用场景：  
+    1. 加日志  
+    2. 权限验证  
+    3. 安全检测  
+    4. 事务控制 
+- 基于配置的AOP
+  ```
+  基于AOP步骤：
+    1.将目标类和切面类加入ioc容器中，@Component
+    2.告诉spring哪个式切面类，@Aspect
+    3.在切面类中使用五个通知注解配置切面中的这些通知方法
+    4.开启基于注解的AOP功能
+
+  基于配置的AOP：
+    1.加入到容器中
+      <bean id="目标类" class="">
+      <bean id="切面类" class="">
+    2. 指定切面
+      <aop:config order="1">
+        <aop:aspect ref="切面类">
+          //可共用
+          <aop:pointcut id="表达式id" expression="切入点表达式"/>
+          <aop:before method="方法名" pointcut="切入点表达式"/>
+          <aop:after-return method="方法名" point-ref="表达式id"/>
+          <aop:around/>
+        </aop:aspect>
+      </aop:config>
+    切面类执行顺序同样可以用order
+  注解：快速方便
+  配置：重要的用配置，不重要的用注解
+  ```
+### 1.5 事务
