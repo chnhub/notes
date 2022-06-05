@@ -6,6 +6,9 @@
     - [1.3 bean](#13-bean)
     - [1.4 AOP](#14-aop)
     - [1.5 事务](#15-事务)
+    - [1.6 SpringMVC](#16-springmvc)
+    - [1.7 Rest风格](#17-rest风格)
+    - [1.8 MyBatis](#18-mybatis)
 ----
 # SSM
 ## 1.Spring
@@ -566,3 +569,379 @@
   配置：重要的用配置，不重要的用注解
   ```
 ### 1.5 事务
+```
+Transcational()事务的细节
+  1.isolation-Isolation:事务的隔离级别
+    并发问题：
+      脏读
+        读到修改后的值，然后数据回滚了
+      不可重复读
+        第一次和第二次读的值不一样
+      幻读
+        第一次和第二次读取的数据多了新的行
+
+    读未提交：
+      未提交的数据可读取，会出现脏数据问题
+    读已提交（Repeatable-read）：
+      set session transaction isolation level read committed;
+      避免脏读，没有避免不可重复读
+    可重复读：避免了不可重复读
+      快照读，第一次读以后就是什么，即使外界数据删除
+      避免了所有问题？
+    串行化：
+  2.propagation-Propagation:事务的传播行为
+    事务的传播+事务的行为
+      多个事务进行嵌套运行，子事务是否要和大事务公用一个事务
+    *required:如果有事务在运行，就在这个事务内运行，否则启动新的
+      将之前事务用的connection传递给这个方法使用
+    *required_new:启动新事务，如果有事务将挂起
+      这个方法直接使用新的connection
+    supports:如果有事务，在该事务内运行，负责不允许
+    not_supported:不应该运行在事务中，如果有则挂起
+    mandatory:必须运行在事务内，否则抛异常
+    never:不运行在事务中，如果有则抛异常
+    nested:如果有，在该事务的嵌套事务内运行，否则，启动新事务，在自己的事务内运行
+
+    向下的required_new一定执行，异常一层一层向上找
+    MulTx(){
+      required
+      A(){
+        required_new
+        C(){}
+        required
+        D(){}
+      }
+      required_new
+      B(){
+        required_new
+        E(){
+          10/0(C不崩)
+        }
+        required
+        F(){}
+      }
+      10/0(C不崩，B下全不崩);
+    }
+    ！！！本类方法中之间的调用就只是一个事务
+    @Transcational
+    public void mulTx(){
+      checkout();//required_new
+      updatePrice();//required_new
+      10/0;//设计均炸了，数据库均未改变。开启事务必须是代理对象      
+    }
+  3.noRollbackFor-Class[]:哪些异常事务可以不回滚
+    noRollbackForClassName-String[](String全类名)
+
+  4.rollbackFor-Class[]:哪些事务需要回滚
+    rollbackForClassName-String[]
+  异常分类
+    运行时异常（非检查异常）：可以不用处理，默认都回滚
+    编译时异常（检测异常）：要么try catch，要么在方法上throws
+  事务的回滚：默认发生异常都回滚，发生编译时异常不回滚
+  
+  5.readOnly-boolean:设置事务为只读事务
+  6.time-int:超时：事务超出指定执行时长后自动终止并回滚
+
+  - 事务xml配置
+    很麻烦，自己百度
+    配置事务管理器；事务建议；事务增强；事务属性
+    重要的用配置，不重要的用注解
+    一万个方法加死你
+```
+### 1.6 SpringMVC
+```
+controller 
+  @RequestMapping 请求路径
+  @RequestParam 请求参数
+  @RequestHeader 请求头
+  @CookieValue cookie信息
+  pojo 自动装配至pojo对象
+
+  @ModelAttribute 提前查出需要更新的数据 更新部分字段时使用
+
+  原生API
+    HttpServletRequest
+    HttpServletResponse
+    HttpSession
+    InputStream
+    OutputStream：字节流
+    Reader:字符流
+  CharacterEncodingFileter 自定义编码格式
+    encoding utf-8 请求乱码
+    forceEncoding 响应乱码
+
+  
+  DispatcherServlet源码:
+  结构:如下图
+  调用doDispatch()方法进行处理
+  1.检查是否上传文件请求
+    multiPart
+  2.根据当前的请求地址找到那个类能来处理
+    mappedHandler = getHandler();
+  3.如果没有找到哪个处理器（控制器）能处理这个请求就404或者抛异常
+    if(mappedHandler == null || mappend...)
+  4.拿到能执行这个方法的适配器(反射)
+    HandlerAdaper ha = ...
+  5.适配器执行目标方法，执行完成后的返回值作为视图名，设置保存到ModelAndView中
+    mv = ha.handle()
+  6.根据方法最终执行完成后封装的ModelAndView;转发到对应页面，而且ModelAndView中的数据可以从请求域中获取
+    processDispatchResult(...)
+service 
+dao
+
+springmvc九大组件：
+  全是接口，好处指定规范
+MultipartResolver 文件上传解析器
+LocaleResolver  区域信息解析器
+ThemeResolver 主题解析
+List<HandlerMapping>  Handler映射信息
+List<HandlerAdapter>  Handler适配器
+List<HandlerExceptionResolver>  异常解析器
+RequestToViewNameTranslator
+FlashMapManager SpringMvc中允许重定向携带数据的功能
+List<ViewResolver>  视图解析器
+
+自定义类型转换器：
+conversionService接口
+
+视图解析：
+数据绑定：
+数据校验：
+文件上传：
+拦截器：
+  implements HandlerInterceptor
+    preHandle
+    postHandle
+    dispatcherservlet
+    afterCompletion
+
+多拦截器：
+  注意执行postHandle和afterCompletion执行顺序
+  secondInterceptor#postHandle 倒叙 -> FirstInterceptor#postHandle
+    |
+  DispatcherServlet#reder
+    |
+  SecondInterceptor#afterCompletion 倒叙 -> FirstInterceptor#afterCompletion
+国际化：
+
+拦截器和Filter:
+  如果某些功能需要其他组件配合完成，就使用拦截器；
+    拦截器脱离springmvc无法使用
+  其他情况用filter；
+
+异常处理：
+  @ExceptionHandler(value={**.class}):异常统一处理
+    可多个都能处理，精确优先
+  全局异常：@ControllerAdvice
+    1.集中处理所有异常的类加入到ioc容器中
+    2.@ControllerAdvice专门处理异常的类
+    本类优先
+
+SpringMVC运行流程：
+  1.所有请求，前端控制器（DispatcherServlet）收到请求，调用doDispatch进行处理
+  2.根据handlerMapping保存的请求映射信息找到，处理当前请求的，处理器执行链（包含拦截器）
+  3.根据当前处理器找到它的适配器（HandlerAdapter）
+  4.拦截器的preHandler先执行
+  5.适配器执行目标方法，并返回modelAndView
+    1.modleAttribute注解标注的方法提前运行
+    2.执行目标方法的时候（确定目标方法用的参数）
+      1.有注解
+      2.无注解
+        1.看是否model、map以及其他的
+        2.如果是自定义类型
+          1.从隐含模型中看有没有，如果有就从隐含模型中拿
+          2.如果没有，再看是否SessionAttributes标注的属性，如果是从Session中拿，如果拿不到会抛异常
+          3.都不是，就利用反射创建对象
+  6.拦截器的postHandle执行
+  7.处理结果；（页面渲染流程）
+    1.如果有异常使用异常解析器处理异常；处理完后还会返回ModelAndView
+    2.调用reder进行页面渲染
+      1.视图解析器根据视图名得到视图对象
+      2.视图对象调用render方法；
+    3.执行拦截器的afterCompletion
+  需要知道1-7标题
+
+Spring整合：
+  SpringMVC和Spring整合的目的；分工明确；
+  SpringMVC的配置文件就来配置和网站转发逻辑以及网站功能有关的（视图解析器，文件上传解析器，支持ajax）
+  Spring的配置文件来配置和业务有关的（事务控制，数据源，xxx）
+
+  spring.xml、springmvc.xml
+  <import resource="spring.xml"/>:可以合并配置文件
+
+  SpringMVC和Spring分容器；
+  启动多个IOC容器时，springmvc为子容器，spring为父容器
+  父容器去拿子容器的controller就炸了
+```
+DispatcherServlet结构：  
+  ![结构](./files/dispatcherServlet结构.png)  
+
+springmvc流程：  
+  ![结构](./files/springmvc流程.png)  
+
+
+### 1.7 Rest风格
+```
+规定url地址
+资源:Resources
+表现层:Representation
+状态转化:State Transfer
+
+Rest推荐
+  url地址起名：/资源名/资源标识符
+  /book/1 :get 查询
+  /book/1 :put 更新
+  /book/1 :delete 删除
+  /book   :post 添加
+
+
+
+
+
+```
+### 1.8 MyBatis
+```
+MyBatis和数据库进行交互；持久化层框架（SQL映射框架）；
+1.从原始JDBC---dbutils(QueryRunner)----jdbcTemplate----xxx;成为工具
+  工具：一些功能的简单封装
+  框架：某个领域的整体解决方案；缓存；考虑异常处理问题，考虑部分字段映射问题
+  1.麻烦
+  2.sql写在代码中；耦合 
+2.Hibernate-数据交互的框架（ORM框架）
+
+使用教程：
+1.导包
+2.写配置（1.全局配置文件 2.dao接口的实现）
+  1.第一个配置文件；mybatis全局配置文件，指导mybatis
+  2.第二个配置文件；每个方法如何向数据库发送sql语句，如何执行。相当于接口的实现类
+    1.将mapper的namespace属性改为接口的全类名
+    2.配置细节
+      <mapper namespace="com.xxx.xxx.dao.xxxDao">
+        <select id="getEmpById" resultType="com.xxx.xxx.bean.employee">
+        select * from t_employee where id=#{id}
+      </mapper>
+    3.写的dao接口的实现文件，mybatis默认是不知道，需要在全局配置文件中注册
+      <mappers>
+        <mapper resource="xxx.xxxDao.xml">
+      </mappers>
+3.测试
+  1.根据全局配置文件创建一个SqlSessionFactory
+    InputStream inputStream = Resources.getResourceAsStream(path)
+    SqlSessionFactory sqlSessionFactory = new SqlSessionFactory(stram);
+  2.获取数据库的一次会话getConnection()
+    SqlSession openSession - sqlSessionFactory.openSession();
+  3.使用SqlSession操作数据库，获取到dao接口的实现
+    EmployeeDao employeeDao = openSession.getMapper(EmployeeDao.class)
+
+如何让xml文件有提示：
+  1.找到dtd：http://****/mybatis-3-config.dtd 约束文件的位置
+  2.复制dtd的引用网址
+  3.找到dtd文件添加到eclipse
+
+查：
+  <select id="getEmpById" resultType="com.xxx.bean.Employee">
+改：
+  <update id="update">
+    update t_employee set empname=#{empName},gender=#{gender},email=#{email}
+  </update>
+删：
+  <delete id="delete">
+    delete from t_employee where id=#{id}
+增：
+  <insert id="insert">
+    insert into t_employee(name, gender, mail) value(#{name},#{gender},#{mail})
+增删改应手动提交
+配置文件：
+  细节：
+    1.获取到的是接口的代理对象；mybatis自动创建的
+    2.sqlssionfactory和sqlSession
+      SqlSessionFactory创建SqlSession对象，Factory只new一次就行
+      SqlSession:相当于connection和数据进行交互，和数据库的一次对话，就应该创建一个新的sqlSession
+  configuration配置
+    properties属性
+    setting设置
+    typeAliases类型命名
+      建议用全类名
+    typeHandlers类型处理器
+      数据库字段类型转为java类型
+    objectFactory对象工厂
+    plugin插件
+      写插件
+    environments
+      环境
+    databaseIdProvider
+      数据库移植
+        <insert id="insert" databaseId="mysql">
+        <insert id="insert" databaseId="oracle">
+      切换至哪个数据库就用对应的sql
+    mappers批量注册
+      url:可以从磁盘或网络路径引用
+      resource:在类路径下找sql映射文件
+      class:直接引用接口的全类名
+        可将xml放在和dao接口同目录下，而且文件名和接口名一直
+        class的另一种用法：
+
+      <mappers>
+        <mapper resource="xxxDao.xml">
+        <mapper class="com.xxx.xxxDao">
+        <mapper class="com.xxx.xxxDaoAnnotation">
+        <mapper url="">
+        批量注册
+        <package name="com.xxx.dao">
+      <mappers>
+      配合使用，重要的dao可以写配置；简单的dao用注解
+    dao.xml能写的标签
+      cache: 和缓存有关
+      cache-ref:和缓存有关
+      delete、updata、insert、select，增删改查
+      parametermap: 参数map，已废弃。。。原本是做复杂参数映射
+      resultMap: 结果映射自定义结果集的封装规则
+      sql：抽取可重用的sql
+    自增主键：useGeneratedKeys="true" keyProperty="id"
+    先查最大id，再插入：order="BEFORE" 
+      <insert id="xxx">
+        <selectKey order="BEFORE" resultType="integer" keProperty="id">
+        </selectKey>
+        Insert into xxx(id, xxx, xxx,) value(#{id},xxx)
+      </insert>
+    现象：
+      1.单个参数
+        基本类型：
+          取值：#{随便写}
+      2.多个参数
+          取值：#{参数名}无效
+          可用：0,1（参数的索引）或者param1, param2
+          Map<String, Object> map = new HashMap<>();
+          map.put("1", 传入的值)
+          #{key}就只是从这个map中取值
+
+      3.@param
+        @Param:为参数指定key；命名参数；推荐这么做
+        告诉mybatis，封装map的时候别乱来，使用我们指定的key
+      4.传入了pojo(javaBean)
+        取值：#{pojo的属性名}
+      5.传入了map
+        取值：#{key} 
+      扩展：多个参数：自动封装map   
+      jdbcType默认：mysql没问题;oracle没问题
+      万一传入的数据是null
+        mysql插入null没问题，oracle不知道null是什么类型
+    #{属性名}：是参数预编译的方式，参数的位置都用？替代，参数后来都是预编译设置进去的；安全，不会有sql注入问题
+    ${属性名}：不是预编译，而是直接和sql语句进行拼接；不安全
+      动态表名时使用，一般是使用预编译方式
+    返回集合：
+      resultType:类型不变，多条数据则是list
+    返回一个map:
+      resultType:map
+      列名作为key，值作为value
+    返回多个map:
+      @MapKey("id")
+      Map<Intger, Employee> 
+    自定义map：
+      <resultMap type="" id="cat">
+        <id property="id" column="id"/>
+        <result property="name" column="cName"/>
+      </resultMap>
+      <select resultMap type="" id="cat">
+
+```
